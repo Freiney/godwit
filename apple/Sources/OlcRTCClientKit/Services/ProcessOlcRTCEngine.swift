@@ -118,9 +118,6 @@ public final class ProcessOlcRTCEngine: OlcRTCEngine {
     }
 
     private func validate(_ options: OlcRTCStartOptions) throws {
-        if options.clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw OlcRTCEngineError.invalidProfile("Client ID is required.")
-        }
         if options.keyHex.count != 64 || !options.keyHex.allSatisfy(\.isHexDigit) {
             throw OlcRTCEngineError.invalidProfile("Encryption key must be 64 hexadecimal characters.")
         }
@@ -339,7 +336,7 @@ public final class ProcessOlcRTCEngine: OlcRTCEngine {
         }
 
         if lastOutputLine.contains("read welcome") || lastOutputLine.contains("SERVER_WELCOME") {
-            return "olcRTC handshake timed out waiting for the server. Check that srv is running with the same provider, room, transport, encryption key, and client ID."
+            return "olcRTC handshake timed out waiting for the server. Check that srv is running with the same provider, room, transport, and encryption key."
         }
 
         return "olcRTC exited before SOCKS became ready: \(lastOutputLine)"

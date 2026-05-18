@@ -33,7 +33,7 @@ public struct OlcRTCStartOptions: Equatable {
         carrierName = profile.carrier.rawValue
         transportName = profile.transport.rawValue
         roomID = profile.roomID
-        clientID = profile.clientID
+        clientID = Self.normalizedClientID(profile)
         keyHex = profile.keyHex
         socksPort = profile.socksPort
         socksUser = profile.socksUser
@@ -57,6 +57,11 @@ public struct OlcRTCStartOptions: Equatable {
         videoTileModule = profile.videoTileModule
         videoTileRS = profile.videoTileRS
         startTimeoutMillis = profile.startTimeoutMillis
+    }
+
+    private static func normalizedClientID(_ profile: ConnectionProfile) -> String {
+        let trimmed = profile.clientID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? profile.id.uuidString : trimmed
     }
 
     private static func normalizedDNSServer(_ value: String) -> String {

@@ -146,9 +146,6 @@ public final class GomobileOlcRTCEngine: OlcRTCEngine {
     }
 
     private func validate(_ options: OlcRTCStartOptions) throws {
-        if options.clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            throw OlcRTCEngineError.invalidProfile("Client ID is required.")
-        }
         if options.keyHex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             throw OlcRTCEngineError.invalidProfile("Encryption key is required.")
         }

@@ -112,7 +112,7 @@ public struct PacketTunnelConfiguration: Equatable {
         carrierName = try Self.stringValue(Key.carrierName, from: values)
         transportName = try Self.stringValue(Key.transportName, from: values)
         roomID = try Self.stringValue(Key.roomID, from: values)
-        clientID = try Self.stringValue(Key.clientID, from: values)
+        clientID = Self.optionalStringValue(Key.clientID, from: values)
         keyHex = try Self.stringValue(Key.keyHex, from: values)
         socksPort = try Self.intValue(Key.socksPort, from: values)
         socksUser = Self.optionalStringValue(Key.socksUser, from: values)

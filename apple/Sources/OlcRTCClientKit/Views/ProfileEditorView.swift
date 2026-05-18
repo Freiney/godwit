@@ -166,9 +166,6 @@ private struct ConnectionSettingsCard: View {
                     )
                     Divider()
 
-                    ConnectionTextRow(title: "Client ID", text: $profile.clientID, onCommit: onCommit)
-                    Divider()
-
                     ConnectionSecureRow(title: "Ключ", text: $profile.keyHex, onCommit: onCommit)
 
                     transportRows

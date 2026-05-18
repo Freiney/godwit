@@ -510,14 +510,12 @@ public final class ClientViewModel: ObservableObject {
             profile.carrier.rawValue,
             profile.transport.rawValue,
             profile.roomID,
-            profile.clientID,
             profile.keyHex,
         ].joined(separator: "|")
         let connectionKey = [
             profile.carrier.rawValue,
             profile.transport.rawValue,
             profile.roomID,
-            profile.clientID,
         ].joined(separator: "|")
 
         var keys: [String] = []
@@ -698,9 +696,6 @@ public final class ClientViewModel: ObservableObject {
     }
 
     private func validate(profile: ConnectionProfile) -> String? {
-        if profile.clientID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return "Укажите Client ID."
-        }
         if profile.keyHex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "Укажите ключ шифрования."
         }

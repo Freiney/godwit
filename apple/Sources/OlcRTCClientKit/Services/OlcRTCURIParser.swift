@@ -5,7 +5,6 @@ public enum OlcRTCURIParserError: LocalizedError, Equatable {
     case missingCarrier
     case missingFragment
     case missingKey
-    case missingClientID
 
     public var errorDescription: String? {
         switch self {
@@ -14,11 +13,9 @@ public enum OlcRTCURIParserError: LocalizedError, Equatable {
         case .missingCarrier:
             "Carrier is missing in the olcRTC link."
         case .missingFragment:
-            "Key/client fragment is missing in the olcRTC link."
+            "Key fragment is missing in the olcRTC link."
         case .missingKey:
             "Encryption key is missing in the olcRTC link."
-        case .missingClientID:
-            "Client ID is missing in the olcRTC link."
         }
     }
 }
@@ -57,7 +54,8 @@ public struct OlcRTCURIParser {
         try parseFragment(String(transportRoomAndFragment[1]), into: &parsed)
 
         if parsed.name == ConnectionProfile.empty.name || parsed.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            parsed.name = "\(parsed.carrier.title) \(parsed.clientID)"
+            let roomName = parsed.roomID.trimmingCharacters(in: .whitespacesAndNewlines)
+            parsed.name = roomName.isEmpty ? parsed.carrier.title : "\(parsed.carrier.title) \(roomName)"
         }
 
         return parsed
@@ -156,21 +154,28 @@ public struct OlcRTCURIParser {
     }
 
     private func parseFragment(_ value: String, into profile: inout ConnectionProfile) throws {
-        let keyAndClient = value.split(separator: "%", maxSplits: 1, omittingEmptySubsequences: false)
+        let keyAndMeta = value.split(separator: "$", maxSplits: 1, omittingEmptySubsequences: false)
+        let keyAndLegacyClient = keyAndMeta.first.map(String.init) ?? ""
+        let keyAndClient = keyAndLegacyClient.split(separator: "%", maxSplits: 1, omittingEmptySubsequences: false)
         guard let key = keyAndClient.first, !key.isEmpty else {
             throw OlcRTCURIParserError.missingKey
-        }
-        guard keyAndClient.count > 1 else {
-            throw OlcRTCURIParserError.missingClientID
         }
 
         profile.keyHex = String(key)
 
-        let clientAndMeta = keyAndClient[1].split(separator: "$", maxSplits: 1, omittingEmptySubsequences: false)
-        guard let clientID = clientAndMeta.first, !clientID.isEmpty else {
-            throw OlcRTCURIParserError.missingClientID
+        if keyAndClient.count > 1 {
+            profile.clientID = String(keyAndClient[1])
         }
 
-        profile.clientID = String(clientID)
+        if keyAndMeta.count > 1,
+           let metaName = normalized(String(keyAndMeta[1])),
+           profile.name == ConnectionProfile.empty.name || profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            profile.name = metaName
+        }
+    }
+
+    private func normalized(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 }
