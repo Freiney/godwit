@@ -134,55 +134,9 @@ public final class ProcessOlcRTCEngine: OlcRTCEngine {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let url = directory.appendingPathComponent("client-\(UUID().uuidString).yaml")
-        let yaml = configurationYAML(options: options, supportRoot: supportRoot, socksPort: socksPort)
+        let yaml = OlcRTCConfigYAMLBuilder(options: options, socksPort: socksPort).yaml()
         try yaml.write(to: url, atomically: true, encoding: .utf8)
         return url
-    }
-
-    private func configurationYAML(options: OlcRTCStartOptions, supportRoot: URL, socksPort: Int) -> String {
-        """
-        mode: cnc
-        auth:
-          provider: \(yamlString(options.carrierName))
-        room:
-          id: \(yamlString(options.roomID))
-        crypto:
-          key: \(yamlString(options.keyHex))
-        net:
-          transport: \(yamlString(options.transportName))
-          dns: \(yamlString(options.dnsServer))
-        socks:
-          host: "127.0.0.1"
-          port: \(socksPort)
-          user: \(yamlString(options.socksUser))
-          pass: \(yamlString(options.socksPass))
-        vp8:
-          fps: \(options.vp8FPS)
-          batch_size: \(options.vp8BatchSize)
-        sei:
-          fps: \(options.seiFPS)
-          batch_size: \(options.seiBatchSize)
-          fragment_size: \(options.seiFragmentSize)
-          ack_timeout_ms: \(options.seiAckTimeoutMillis)
-        video:
-          width: \(options.videoWidth)
-          height: \(options.videoHeight)
-          fps: \(options.videoFPS)
-          bitrate: \(yamlString(options.videoBitrate))
-          hw: \(yamlString(options.videoHardwareAcceleration))
-          codec: \(yamlString(options.videoCodec))
-          qr_size: \(options.videoQRSize)
-          qr_recovery: \(yamlString(options.videoQRRecovery))
-          tile_module: \(options.videoTileModule)
-          tile_rs: \(options.videoTileRS)
-        data: \(yamlString(supportRoot.appendingPathComponent("data").path))
-        debug: \(options.debugLogging ? "true" : "false")
-
-        """
-    }
-
-    private func yamlString(_ value: String) -> String {
-        "'\(value.replacingOccurrences(of: "'", with: "''"))'"
     }
 
     private func launchProcess(options: OlcRTCStartOptions, supportRoot: URL, cliURL: URL, socksPort: Int) throws {
@@ -221,6 +175,7 @@ public final class ProcessOlcRTCEngine: OlcRTCEngine {
 
         emit("Launching \(cliURL.path)")
         emit("Using olcRTC config \(configURL.path)")
+        emit("olcRTC profile provider=\(options.carrierName) transport=\(options.transportName)")
         try task.run()
     }
 

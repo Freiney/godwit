@@ -3,8 +3,13 @@ import Foundation
 public enum OlcRTCURIParserError: LocalizedError, Equatable {
     case unsupportedScheme
     case missingCarrier
+    case missingTransport
+    case missingRoom
     case missingFragment
     case missingKey
+    case invalidCarrier(String)
+    case invalidTransport(String)
+    case invalidPayload(String)
 
     public var errorDescription: String? {
         switch self {
@@ -12,93 +17,112 @@ public enum OlcRTCURIParserError: LocalizedError, Equatable {
             "Only olcrtc:// links are supported."
         case .missingCarrier:
             "Carrier is missing in the olcRTC link."
+        case .missingTransport:
+            "Transport is missing in the olcRTC link."
+        case .missingRoom:
+            "Room ID is missing in the olcRTC link."
         case .missingFragment:
             "Key fragment is missing in the olcRTC link."
         case .missingKey:
             "Encryption key is missing in the olcRTC link."
+        case let .invalidCarrier(value):
+            "Unsupported carrier in the olcRTC link: \(value)."
+        case let .invalidTransport(value):
+            "Unsupported transport in the olcRTC link: \(value)."
+        case let .invalidPayload(value):
+            "Invalid transport payload in the olcRTC link: \(value)."
         }
     }
 }
 
 public struct OlcRTCURIParser {
+    private static let scheme = "olcrtc://"
+
     public init() {}
 
     public func parse(_ rawValue: String, into profile: ConnectionProfile) throws -> ConnectionProfile {
         let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard value.lowercased().hasPrefix("olcrtc://") else {
+        guard value.range(of: Self.scheme, options: [.anchored, .caseInsensitive]) != nil else {
             throw OlcRTCURIParserError.unsupportedScheme
         }
 
-        let mainPart = value.components(separatedBy: " / ").first ?? value
-        let body = String(mainPart.dropFirst("olcrtc://".count))
-        let carrierAndRest = body.split(separator: "?", maxSplits: 1, omittingEmptySubsequences: false)
-        guard let carrierValue = carrierAndRest.first, !carrierValue.isEmpty else {
+        let body = String(value.dropFirst(Self.scheme.count))
+        let carrierSplit = try splitRequired(body, at: "?", missing: .missingTransport)
+        let carrierName = normalizedIdentifier(carrierSplit.head)
+        guard !carrierName.isEmpty else {
             throw OlcRTCURIParserError.missingCarrier
+        }
+        guard let carrier = Carrier(rawValue: carrierName) else {
+            throw OlcRTCURIParserError.invalidCarrier(carrierSplit.head)
+        }
+
+        let fragmentSplit = try splitRequired(carrierSplit.tail, at: "#", missing: .missingFragment)
+        let roomSplit = try splitRequired(fragmentSplit.head, at: "@", missing: .missingRoom)
+        let transport = try parseTransport(roomSplit.head)
+        let roomID = roomSplit.tail.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !roomID.isEmpty else {
+            throw OlcRTCURIParserError.missingRoom
         }
 
         var parsed = profile
-        if let carrier = Carrier(rawValue: String(carrierValue)) {
-            parsed.carrier = carrier
-        }
-
-        guard carrierAndRest.count > 1 else {
-            throw OlcRTCURIParserError.missingFragment
-        }
-
-        let transportRoomAndFragment = carrierAndRest[1].split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false)
-        guard transportRoomAndFragment.count == 2 else {
-            throw OlcRTCURIParserError.missingFragment
-        }
-
-        parseTransportAndRoom(String(transportRoomAndFragment[0]), into: &parsed)
-        try parseFragment(String(transportRoomAndFragment[1]), into: &parsed)
+        parsed.carrier = carrier
+        parsed.transport = transport.name
+        parsed.roomID = roomID
+        applyTransportParameters(transport.parameters, to: &parsed)
+        try parseFragment(fragmentSplit.tail, into: &parsed)
 
         if parsed.name == ConnectionProfile.empty.name || parsed.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let roomName = parsed.roomID.trimmingCharacters(in: .whitespacesAndNewlines)
-            parsed.name = roomName.isEmpty ? parsed.carrier.title : "\(parsed.carrier.title) \(roomName)"
+            parsed.name = "\(parsed.carrier.title) \(parsed.roomID)"
         }
 
         return parsed
     }
 
-    private func parseTransportAndRoom(_ value: String, into profile: inout ConnectionProfile) {
-        let parts = value.split(separator: "@", maxSplits: 1, omittingEmptySubsequences: false)
-        let transportValue = parts.first.map(String.init) ?? ""
-        let (transportName, parameters) = parseTransportValue(transportValue)
-
-        if let transport = Transport(rawValue: transportName) {
-            profile.transport = transport
-        } else if transportName == "vp8" {
-            profile.transport = .vp8channel
-        } else if transportName == "dc" || transportName == "data" {
-            profile.transport = .datachannel
+    private func parseTransport(_ value: String) throws -> (name: Transport, parameters: [String: String]) {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw OlcRTCURIParserError.missingTransport
         }
 
-        if parts.count > 1 {
-            profile.roomID = String(parts[1])
+        let parsed = try parseTransportValue(trimmed)
+        guard let transport = Transport(rawValue: parsed.name) else {
+            throw OlcRTCURIParserError.invalidTransport(parsed.name)
         }
-
-        applyTransportParameters(parameters, to: &profile)
+        return (transport, parsed.parameters)
     }
 
-    private func parseTransportValue(_ value: String) -> (name: String, parameters: [String: String]) {
-        let parts = value.split(separator: "<", maxSplits: 1, omittingEmptySubsequences: false)
-        let name = parts.first.map(String.init) ?? value
-        guard parts.count == 2 else {
-            return (name, [:])
+    private func parseTransportValue(_ value: String) throws -> (name: String, parameters: [String: String]) {
+        guard let payloadStart = value.firstIndex(of: "<") else {
+            return (normalizedIdentifier(value), [:])
         }
 
-        let parameterText = parts[1].split(separator: ">", maxSplits: 1).first.map(String.init) ?? ""
+        guard value.hasSuffix(">"), let payloadEnd = value.lastIndex(of: ">"), payloadEnd > payloadStart else {
+            throw OlcRTCURIParserError.invalidPayload(value)
+        }
+
+        let name = normalizedIdentifier(String(value[..<payloadStart]))
+        guard !name.isEmpty else {
+            throw OlcRTCURIParserError.missingTransport
+        }
+
+        let payloadText = String(value[value.index(after: payloadStart)..<payloadEnd])
         var parameters: [String: String] = [:]
-        for pair in parameterText.split(separator: "&") {
+        guard !payloadText.isEmpty else {
+            return (name, parameters)
+        }
+
+        for pair in payloadText.split(separator: "&", omittingEmptySubsequences: true) {
             let keyValue = pair.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
             guard keyValue.count == 2 else {
-                continue
+                throw OlcRTCURIParserError.invalidPayload(String(pair))
             }
-            let key = keyValue[0].trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            let value = keyValue[1].trimmingCharacters(in: .whitespacesAndNewlines)
-            parameters[key] = value
+            let key = normalizedIdentifier(String(keyValue[0]))
+            guard !key.isEmpty else {
+                throw OlcRTCURIParserError.invalidPayload(String(pair))
+            }
+            parameters[key] = String(keyValue[1]).trimmingCharacters(in: .whitespacesAndNewlines)
         }
+
         return (name, parameters)
     }
 
@@ -154,28 +178,47 @@ public struct OlcRTCURIParser {
     }
 
     private func parseFragment(_ value: String, into profile: inout ConnectionProfile) throws {
-        let keyAndMeta = value.split(separator: "$", maxSplits: 1, omittingEmptySubsequences: false)
-        let keyAndLegacyClient = keyAndMeta.first.map(String.init) ?? ""
-        let keyAndClient = keyAndLegacyClient.split(separator: "%", maxSplits: 1, omittingEmptySubsequences: false)
-        guard let key = keyAndClient.first, !key.isEmpty else {
+        let metaSplit = splitOptional(value, at: "$")
+        let legacyClientSplit = splitOptional(metaSplit.head, at: "%")
+        let key = legacyClientSplit.head.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
             throw OlcRTCURIParserError.missingKey
         }
 
-        profile.keyHex = String(key)
+        profile.keyHex = key
 
-        if keyAndClient.count > 1 {
-            profile.clientID = String(keyAndClient[1])
+        if let clientID = legacyClientSplit.tail?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !clientID.isEmpty {
+            profile.clientID = clientID
         }
 
-        if keyAndMeta.count > 1,
-           let metaName = normalized(String(keyAndMeta[1])),
-           profile.name == ConnectionProfile.empty.name || profile.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            profile.name = metaName
+        if let mimo = metaSplit.tail?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !mimo.isEmpty {
+            profile.name = mimo
         }
     }
 
-    private func normalized(_ value: String) -> String? {
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
+    private func splitRequired(
+        _ value: String,
+        at separator: Character,
+        missing error: OlcRTCURIParserError
+    ) throws -> (head: String, tail: String) {
+        guard let index = value.firstIndex(of: separator) else {
+            throw error
+        }
+        let tailStart = value.index(after: index)
+        return (String(value[..<index]), String(value[tailStart...]))
+    }
+
+    private func splitOptional(_ value: String, at separator: Character) -> (head: String, tail: String?) {
+        guard let index = value.firstIndex(of: separator) else {
+            return (value, nil)
+        }
+        let tailStart = value.index(after: index)
+        return (String(value[..<index]), String(value[tailStart...]))
+    }
+
+    private func normalizedIdentifier(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }

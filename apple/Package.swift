@@ -42,5 +42,9 @@ let package = Package(
             dependencies: ["OlcRTCClientKit"],
             exclude: ["Assets.xcassets"]
         ),
+        .testTarget(
+            name: "OlcRTCClientKitTests",
+            dependencies: ["OlcRTCClientKit"]
+        ),
     ] + mobileTargets
 )

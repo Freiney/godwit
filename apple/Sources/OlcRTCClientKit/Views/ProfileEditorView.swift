@@ -123,10 +123,6 @@ public struct ProfileEditorView: View {
         .environment(\.defaultMinListHeaderHeight, 22)
         #endif
         .onDisappear(perform: onCommit)
-        .onChange(of: profile.carrier) { carrier in
-            profile.transport = carrier.recommendedTransport
-            onCommit()
-        }
     }
 }
 

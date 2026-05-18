@@ -17,14 +17,6 @@ public enum Carrier: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    public var recommendedTransport: Transport {
-        switch self {
-        case .jitsi, .jazz:
-            .datachannel
-        case .telemost, .wbstream:
-            .vp8channel
-        }
-    }
 }
 
 public enum Transport: String, CaseIterable, Codable, Identifiable {
