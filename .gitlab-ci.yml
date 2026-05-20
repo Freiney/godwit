@@ -1,0 +1,54 @@
+include:
+  - project: "ci/mobile"
+    ref: main
+    file: "/.ios.yml"
+
+variables:
+  XCODE_PROJECT: "apple/Godwit.xcodeproj"
+  XCODE_SCHEME: "OlcRTCClient iOS"
+  APP_IDENTIFIER: "community.openlibre.olcrtc.ios"
+  APP_IDENTIFIERS: "community.openlibre.olcrtc.ios,community.openlibre.olcrtc.ios.PacketTunnel"
+  IOS_SIGNING_TARGETS: "OlcRTCClient iOS=community.openlibre.olcrtc.ios,OlcRTCPacketTunnel=community.openlibre.olcrtc.ios.PacketTunnel"
+
+mobile:testflight:
+  extends: .mobile:defaults
+  stage: mobile_build
+  rules:
+    - if: '$CI_COMMIT_REF_PROTECTED != "true"'
+      when: never
+    - if: '$CI_COMMIT_TAG'
+      when: manual
+      allow_failure: false
+  script:
+    - export PATH="$HOME/Documents/golang/bin:/opt/homebrew/opt/go/libexec/bin:$PATH"
+    - go version
+    - if ! command -v gomobile >/dev/null 2>&1; then go install golang.org/x/mobile/cmd/gomobile@latest; fi
+    - gomobile init
+    - ./apple/Scripts/build-xcframework.sh
+    - bundle exec fastlane ios ci_testflight
+
+olcrtc:ios:simulator:
+  extends: .mobile:defaults
+  stage: mobile_build
+  rules:
+    - when: manual
+  script:
+    - export PATH="$HOME/Documents/golang/bin:/opt/homebrew/opt/go/libexec/bin:$PATH"
+    - go version
+    - if ! command -v gomobile >/dev/null 2>&1; then go install golang.org/x/mobile/cmd/gomobile@latest; fi
+    - gomobile init
+    - ./apple/Scripts/build-xcframework.sh
+    - xcodebuild -project "$XCODE_PROJECT" -scheme "$XCODE_SCHEME" -configuration Debug -destination "generic/platform=iOS Simulator" build
+
+olcrtc:ios:device-compile:
+  extends: .mobile:defaults
+  stage: mobile_build
+  rules:
+    - when: manual
+  script:
+    - export PATH="$HOME/Documents/golang/bin:/opt/homebrew/opt/go/libexec/bin:$PATH"
+    - go version
+    - if ! command -v gomobile >/dev/null 2>&1; then go install golang.org/x/mobile/cmd/gomobile@latest; fi
+    - gomobile init
+    - ./apple/Scripts/build-xcframework.sh
+    - xcodebuild -project "$XCODE_PROJECT" -scheme "$XCODE_SCHEME" -configuration Debug -destination "generic/platform=iOS" CODE_SIGNING_ALLOWED=NO build
