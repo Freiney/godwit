@@ -32,8 +32,17 @@ jobs:
       - name: Build IPA
         run: ./apple/Scripts/build-ios-unsigned-local-ipa.sh
 
+      - name: Show build output (debug)
+        run: |
+          echo "=== apple/.build ==="
+          ls -R apple/.build || true
+
+      - name: Find IPA
+        run: |
+          find apple/.build -name "*.ipa" || true
+
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
           name: godwit-ios-ipa
-          path: apple/.build/**/*.ipa
+          path: apple/.build
