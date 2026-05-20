@@ -33,6 +33,11 @@ targets:
         UILaunchScreen: {}
         UIBackgroundModes:
           - audio
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
     dependencies:
       - package: OlcRTCApple
         product: OlcRTCClientKit
