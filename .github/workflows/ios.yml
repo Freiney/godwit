@@ -1,48 +1,68 @@
-name: iOS Build
+name: Build iOS IPA
 
 on:
   workflow_dispatch:
+    inputs:
+      configuration:
+        description: Xcode build configuration
+        required: true
+        default: Release
+        type: choice
+        options:
+          - Release
+          - Debug
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-ios:
-    name: Build unsigned iOS IPA
+  unsigned-local-ipa:
+    name: Unsigned Local SOCKS IPA
     runs-on: macos-latest
+    timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           submodules: recursive
-
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-            go-version: '1.25.x'
+          go-version: 1.25.x
+          cache-dependency-path: olcrtc/go.sum
 
-            
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
-
-      - name: Accept Xcode license
-        run: sudo xcodebuild -license accept
-
-      - name: Install dependencies
-        run: brew install xcodegen || true
-
-      - name: Build IPA
-        run: ./apple/Scripts/build-ios-unsigned-local-ipa.sh
-
-      - name: Show build output (debug)
+      - name: Show toolchain versions
         run: |
-          echo "=== apple/.build ==="
-          ls -R apple/.build || true
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-path
+          go version
 
-      - name: Find IPA
+      - name: Install gomobile
         run: |
-          find apple/.build -name "*.ipa" || true
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          "$(go env GOPATH)/bin/gomobile" init
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Build unsigned local IPA
+        env:
+          CONFIGURATION: ${{ inputs.configuration }}
+        run: |
+          chmod +x apple/Scripts/*.sh
+          ./apple/Scripts/build-ios-unsigned-local-ipa.sh
+
+      - name: Show artifact
+        run: ls -lh apple/.build/ios-unsigned-local/Godwit-unsigned-local.ipa
 
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
-          name: godwit-ios-ipa
-          path: apple/.build
+          name: Godwit-iOS-unsigned-local-${{ github.run_number }}
+          path: apple/.build/ios-unsigned-local/Godwit-unsigned-local.ipa
+          if-no-files-found: error
+          retention-days: 14
